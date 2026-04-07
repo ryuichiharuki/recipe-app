@@ -1,8 +1,12 @@
 """
-GET  /api/recipes        — list (filters: category, tag, search)
-POST /api/recipes        — create
+GET    /api/recipes        — list (filters: category, tag, search)
+POST   /api/recipes        — create
+GET    /api/recipes/:id    — fetch one
+PUT    /api/recipes/:id    — update
+DELETE /api/recipes/:id    — delete
 """
 import json
+import re
 import sys
 import os
 
@@ -29,6 +33,10 @@ class handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0))
         return json.loads(self.rfile.read(n)) if n else {}
 
+    def _id(self):
+        m = re.search(r"/api/recipes/(\d+)", self.path)
+        return int(m.group(1)) if m else None
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -38,12 +46,20 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         ensure_table()
-        qs = parse_qs(urlparse(self.path).query)
-        p  = lambda k: qs.get(k, [""])[0]
+        id_ = self._id()
 
         c = get_conn()
         try:
             cur = c.cursor()
+            # Single recipe
+            if id_:
+                cur.execute("SELECT * FROM recipes WHERE id = %s", (id_,))
+                row = cur.fetchone()
+                return self._json(row_to_dict(row) if row else {"error": "Not found"}, 200 if row else 404)
+
+            # List
+            qs = parse_qs(urlparse(self.path).query)
+            p  = lambda k: qs.get(k, [""])[0]
             sql, args = "SELECT * FROM recipes WHERE 1=1", []
             if p("category"):
                 sql += " AND category = %s"; args.append(p("category"))
@@ -77,6 +93,43 @@ class handler(BaseHTTPRequestHandler):
             )
             c.commit()
             self._json(row_to_dict(cur.fetchone()))
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+        finally:
+            c.close()
+
+    def do_PUT(self):
+        ensure_table()
+        id_ = self._id()
+        b   = self._body()
+        c   = get_conn()
+        try:
+            cur = c.cursor()
+            cur.execute(
+                "UPDATE recipes"
+                " SET title=%s,description=%s,image=%s,ingredients=%s,instructions=%s,"
+                "     category=%s,tags=%s,memo=%s,updated_at=CURRENT_TIMESTAMP"
+                " WHERE id=%s RETURNING *",
+                (b.get("title",""), b.get("description",""), b.get("image",""),
+                 json.dumps(b.get("ingredients",[])), b.get("instructions",""),
+                 b.get("category",""), json.dumps(b.get("tags",[])), b.get("memo",""),
+                 id_)
+            )
+            c.commit()
+            row = cur.fetchone()
+            self._json(row_to_dict(row) if row else {"error": "Not found"}, 200 if row else 404)
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+        finally:
+            c.close()
+
+    def do_DELETE(self):
+        id_ = self._id()
+        c   = get_conn()
+        try:
+            c.cursor().execute("DELETE FROM recipes WHERE id = %s", (id_,))
+            c.commit()
+            self._json({"success": True})
         except Exception as e:
             self._json({"error": str(e)}, 500)
         finally:
