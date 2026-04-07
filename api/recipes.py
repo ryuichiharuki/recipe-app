@@ -34,8 +34,9 @@ class handler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n)) if n else {}
 
     def _id(self):
-        m = re.search(r"/api/recipes/(\d+)", self.path)
-        return int(m.group(1)) if m else None
+        qs = parse_qs(urlparse(self.path).query)
+        ids = qs.get("id", [])
+        return int(ids[0]) if ids else None
 
     def do_OPTIONS(self):
         self.send_response(200)

@@ -1,5 +1,1 @@
-{
-  "rewrites": [
-    { "source": "/api/recipes/:id", "destination": "/api/recipes" }
-  ]
-}
+{}

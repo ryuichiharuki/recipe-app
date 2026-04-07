@@ -171,7 +171,7 @@ async function loadRecipes() {
 
 /* ===== Detail Modal ===== */
 async function openDetail(id) {
-  const r = await api.get(`/api/recipes/${id}`);
+  const r = await api.get(`/api/recipes?id=${id}`);
   const body = $('detailBody');
   body.innerHTML = '';
 
@@ -251,7 +251,7 @@ function openAddModal() {
 }
 
 async function openEditModal(id) {
-  const r = await api.get(`/api/recipes/${id}`);
+  const r = await api.get(`/api/recipes?id=${id}`);
   state.editingId = id;
   state.formTags = [...r.tags];
 
@@ -441,7 +441,7 @@ $('saveBtn').addEventListener('click', async () => {
   $('saveBtn').textContent = '保存中...';
   try {
     if (state.editingId) {
-      await api.put(`/api/recipes/${state.editingId}`, payload);
+      await api.put(`/api/recipes?id=${state.editingId}`, payload);
     } else {
       await api.post('/api/recipes', payload);
     }
@@ -462,7 +462,7 @@ $('deleteBtn').addEventListener('click', async () => {
   if (!state.editingId) return;
   if (!confirm('このレシピを削除しますか？')) return;
   try {
-    await api.del(`/api/recipes/${state.editingId}`);
+    await api.del(`/api/recipes?id=${state.editingId}`);
     closeOverlay('formOverlay');
     closeOverlay('detailOverlay');
     await loadRecipes();
