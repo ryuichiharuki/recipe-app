@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "api/**/*.py": {
-      "runtime": "vercel-python@4.3.0",
-      "includeFiles": "api/_shared.py"
-    }
-  },
   "rewrites": [
     { "source": "/api/recipes/:id", "destination": "/api/recipes/[id]" }
   ]
