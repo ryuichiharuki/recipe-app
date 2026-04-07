@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#e8621a">
+  <title>レシピコレクション</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-left">
+        <span class="header-icon">🍳</span>
+        <h1 class="header-title">レシピコレクション</h1>
+      </div>
+      <button class="btn btn-primary" id="addBtn">
+        <span class="btn-icon">+</span>
+        <span class="btn-text">レシピを追加</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <div class="filter-bar-inner">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="9" r="6"/><path d="M15 15l3 3"/>
+        </svg>
+        <input type="search" id="searchInput" class="search-input" placeholder="タイトル・説明・メモを検索...">
+      </div>
+      <div class="filter-selects">
+        <select id="categoryFilter" class="filter-select">
+          <option value="">すべてのカテゴリ</option>
+        </select>
+      </div>
+    </div>
+    <div class="tag-filter-row" id="tagFilterRow" style="display:none">
+      <span class="tag-filter-label">タグ:</span>
+      <div class="tag-filter-pills" id="tagFilterPills"></div>
+    </div>
+  </div>
+
+  <main class="main">
+    <div class="recipe-count" id="recipeCount"></div>
+    <div class="recipe-grid" id="recipeGrid"></div>
+    <div class="empty-state" id="emptyState" style="display:none">
+      <div class="empty-icon">🥄</div>
+      <p class="empty-title">レシピがまだありません</p>
+      <p class="empty-sub">URLを貼り付けてレシピを自動取得、または手動で追加できます</p>
+      <button class="btn btn-primary" id="emptyAddBtn">最初のレシピを追加</button>
+    </div>
+  </main>
+
+  <!-- ===== Add/Edit Modal ===== -->
+  <div class="overlay" id="formOverlay" aria-hidden="true">
+    <div class="modal" id="formModal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">レシピを追加</h2>
+        <button class="close-btn" id="formClose" aria-label="閉じる">&times;</button>
+      </div>
+
+      <!-- Step 1: URL input -->
+      <div id="stepUrl" class="modal-body">
+        <div class="form-group">
+          <label class="form-label">レシピページのURL</label>
+          <div class="url-row">
+            <input type="url" id="urlInput" class="form-input" placeholder="https://cookpad.com/recipe/..." autocomplete="off">
+            <button class="btn btn-primary" id="fetchBtn">取得</button>
+          </div>
+          <p class="form-hint">URLを入力すると、タイトル・画像・材料などを自動で取得します</p>
+        </div>
+        <div class="fetch-status" id="fetchStatus" style="display:none"></div>
+        <div class="step-footer">
+          <button class="btn btn-ghost" id="skipFetchBtn">URLなしで手動入力 →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Recipe form -->
+      <div id="stepForm" class="modal-body" style="display:none">
+        <form id="recipeForm" novalidate>
+          <input type="hidden" id="formId">
+          <input type="hidden" id="formUrl">
+
+          <div class="image-header" id="imageHeader" style="display:none">
+            <img id="previewImg" src="" alt="" class="preview-img">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label required">タイトル</label>
+            <input type="text" id="formTitle" class="form-input" placeholder="レシピ名" required>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">カテゴリ</label>
+              <select id="formCategory" class="form-input">
+                <option value="">未設定</option>
+                <option value="朝食">🌅 朝食</option>
+                <option value="昼食">☀️ 昼食</option>
+                <option value="夕食">🌙 夕食</option>
+                <option value="デザート">🍰 デザート</option>
+                <option value="おやつ">🍪 おやつ</option>
+                <option value="ドリンク">☕ ドリンク</option>
+                <option value="その他">📦 その他</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">画像URL</label>
+              <input type="url" id="formImage" class="form-input" placeholder="https://...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">タグ</label>
+            <div class="tag-input-wrap" id="formTagWrap">
+              <div class="tag-chips" id="formTagChips"></div>
+              <input type="text" id="formTagInput" class="tag-text-input" placeholder="タグを入力してEnterで追加">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">説明</label>
+            <textarea id="formDescription" class="form-textarea" rows="2" placeholder="レシピの説明..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">材料</label>
+            <div id="ingredientsList" class="ingredients-list"></div>
+            <button type="button" class="btn btn-ghost add-ingredient-btn" id="addIngredientBtn">+ 材料を追加</button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">作り方</label>
+            <textarea id="formInstructions" class="form-textarea" rows="5" placeholder="1. &#10;2. &#10;3. "></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label memo-label">📝 メモ</label>
+            <textarea id="formMemo" class="form-textarea memo-textarea" rows="3" placeholder="アレンジ方法・感想・次回試したいこと..."></textarea>
+          </div>
+        </form>
+
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="backToUrlBtn">← 戻る</button>
+          <div class="footer-right">
+            <button class="btn btn-danger" id="deleteBtn" style="display:none">削除</button>
+            <button class="btn btn-primary" id="saveBtn">保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Detail Modal ===== -->
+  <div class="overlay" id="detailOverlay" aria-hidden="true">
+    <div class="modal modal-wide" id="detailModal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div></div>
+        <div class="detail-header-actions">
+          <button class="btn btn-ghost" id="editFromDetailBtn">編集</button>
+          <button class="close-btn" id="detailClose" aria-label="閉じる">&times;</button>
+        </div>
+      </div>
+      <div id="detailBody" class="modal-body detail-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
