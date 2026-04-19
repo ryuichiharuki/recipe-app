@@ -188,6 +188,15 @@
     .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* URL Step */
+    .url-row { display: flex; gap: 8px; }
+    .url-row .form-input { flex: 1; }
+    .fetch-status { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .fetch-status.loading { background: #f0f4ff; color: #3563e9; }
+    .fetch-status.error { background: #fff0f0; color: var(--danger); }
+    .fetch-status.success { background: #f0fff4; color: #22863a; }
+    .step-footer { text-align: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+
     /* Responsive */
     @media (max-width: 480px) {
       .btn-text { display: none; }
@@ -253,9 +262,27 @@
         <h2 class="modal-title" id="modalTitle">レシピを追加</h2>
         <button class="close-btn" id="formClose" aria-label="閉じる">&times;</button>
       </div>
-      <div id="stepForm" class="modal-body">
+      <!-- Step 1: URL -->
+      <div id="stepUrl" class="modal-body">
+        <div class="form-group">
+          <label class="form-label">レシピページのURL</label>
+          <div class="url-row">
+            <input type="url" id="urlInput" class="form-input" placeholder="https://cookpad.com/recipe/..." autocomplete="off">
+            <button class="btn btn-primary" id="fetchBtn">取得</button>
+          </div>
+          <p class="form-hint" style="margin-top:6px">URLを入力すると、タイトル・画像・材料などを自動で取得します</p>
+        </div>
+        <div class="fetch-status" id="fetchStatus" style="display:none"></div>
+        <div class="step-footer">
+          <button class="btn btn-ghost" id="skipFetchBtn">URLなしで手動入力 →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Form -->
+      <div id="stepForm" class="modal-body" style="display:none">
         <form id="recipeForm" novalidate>
           <input type="hidden" id="formId">
+          <input type="hidden" id="formUrl">
 
           <div class="image-header" id="imageHeader" style="display:none">
             <img id="previewImg" src="" alt="" class="preview-img">
@@ -317,7 +344,7 @@
         </form>
 
         <div class="modal-footer">
-          <div></div>
+          <button class="btn btn-ghost" id="backToUrlBtn">← 戻る</button>
           <div class="footer-right">
             <button class="btn btn-danger" id="deleteBtn" style="display:none">削除</button>
             <button class="btn btn-primary" id="saveBtn">保存する</button>
@@ -605,6 +632,123 @@ function openDetail(id) {
   openOverlay('detailOverlay');
 }
 
+/* ===== URL Fetch ===== */
+function showStep(step) {
+  $('stepUrl').style.display = step === 'url' ? '' : 'none';
+  $('stepForm').style.display = step === 'form' ? '' : 'none';
+  $('backToUrlBtn').style.display = step === 'form' && !state.editingId ? '' : 'none';
+}
+
+function setFetchStatus(type, msg) {
+  const s = $('fetchStatus');
+  s.style.display = '';
+  s.className = 'fetch-status ' + type;
+  s.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span><span>${msg}</span>`
+    : `<span>${msg}</span>`;
+}
+
+function resetFetchStatus() {
+  const s = $('fetchStatus');
+  s.style.display = 'none';
+  s.className = 'fetch-status';
+  s.innerHTML = '';
+}
+
+function fillForm(data) {
+  state.formTags = [];
+  $('formTitle').value = data.title || '';
+  $('formDescription').value = data.description || '';
+  $('formInstructions').value = data.instructions || '';
+  $('formImage').value = data.image || '';
+  $('formUrl').value = data.url || '';
+  renderIngredients(data.ingredients || []);
+  renderFormTags();
+  updateImagePreview(data.image);
+}
+
+async function fetchRecipe(url) {
+  // CORSプロキシ経由でHTMLを取得
+  const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error('取得失敗');
+  const json = await res.json();
+  const html = json.contents;
+  if (!html) throw new Error('コンテンツなし');
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const recipe = { url, title: '', description: '', image: '', ingredients: [], instructions: '' };
+
+  // JSON-LD (schema.org/Recipe) を探す
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (const s of scripts) {
+    try {
+      let data = JSON.parse(s.textContent);
+      const nodes = [].concat(data['@graph'] || data);
+      const r = nodes.flat().find(n => n && [].concat(n['@type']).includes('Recipe'));
+      if (!r) continue;
+
+      if (r.name) recipe.title = r.name;
+      if (r.description) recipe.description = r.description;
+
+      let img = r.image;
+      if (Array.isArray(img)) img = img[0];
+      if (img && typeof img === 'object') img = img.url;
+      if (img) recipe.image = img;
+
+      if (r.recipeIngredient) recipe.ingredients = r.recipeIngredient.map(String);
+
+      const instr = r.recipeInstructions;
+      if (instr) {
+        if (Array.isArray(instr)) {
+          recipe.instructions = instr.map((s, i) => {
+            const text = typeof s === 'string' ? s : (s.text || '');
+            return `${i + 1}. ${text}`;
+          }).join('\n');
+        } else {
+          recipe.instructions = String(instr);
+        }
+      }
+      if (recipe.title) break;
+    } catch {}
+  }
+
+  // OGP フォールバック
+  const og = sel => (doc.querySelector(`meta[property="${sel}"]`) || doc.querySelector(`meta[name="${sel}"]`))?.getAttribute('content') || '';
+  if (!recipe.title) recipe.title = og('og:title') || og('twitter:title') || doc.title || '無題のレシピ';
+  if (!recipe.description) recipe.description = og('og:description') || og('description') || '';
+  if (!recipe.image) recipe.image = og('og:image') || og('twitter:image') || '';
+
+  return recipe;
+}
+
+$('fetchBtn').addEventListener('click', async () => {
+  const url = $('urlInput').value.trim();
+  if (!url) return;
+  setFetchStatus('loading', 'レシピを取得中...');
+  $('fetchBtn').disabled = true;
+  try {
+    const data = await fetchRecipe(url);
+    fillForm(data);
+    setFetchStatus('success', '✓ 取得しました！内容を確認して保存してください');
+    setTimeout(() => { showStep('form'); resetFetchStatus(); }, 800);
+  } catch {
+    setFetchStatus('error', '⚠ 取得できませんでした。手動で入力してください。');
+  } finally {
+    $('fetchBtn').disabled = false;
+  }
+});
+
+$('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('fetchBtn').click(); });
+
+$('skipFetchBtn').addEventListener('click', () => {
+  $('formUrl').value = $('urlInput').value.trim();
+  fillForm({ url: $('urlInput').value.trim() });
+  showStep('form');
+});
+
+$('backToUrlBtn').addEventListener('click', () => showStep('url'));
+
 /* ===== Form ===== */
 function openAddModal() {
   state.editingId = null;
@@ -612,17 +756,14 @@ function openAddModal() {
   $('modalTitle').textContent = 'レシピを追加';
   $('deleteBtn').style.display = 'none';
   $('formId').value = '';
-  $('formTitle').value = '';
+  $('urlInput').value = '';
+  resetFetchStatus();
+  fillForm({});
   $('formCategory').value = '';
-  $('formDescription').value = '';
-  $('formInstructions').value = '';
   $('formMemo').value = '';
-  $('formImage').value = '';
-  $('imageHeader').style.display = 'none';
-  renderFormTags();
-  renderIngredients([]);
+  showStep('url');
   openOverlay('formOverlay');
-  setTimeout(() => $('formTitle').focus(), 120);
+  setTimeout(() => $('urlInput').focus(), 120);
 }
 
 function openEditModal(id) {
@@ -633,15 +774,11 @@ function openEditModal(id) {
   $('modalTitle').textContent = 'レシピを編集';
   $('deleteBtn').style.display = '';
   $('formId').value = id;
-  $('formTitle').value = r.title;
   $('formCategory').value = r.category || '';
-  $('formDescription').value = r.description || '';
-  $('formInstructions').value = r.instructions || '';
   $('formMemo').value = r.memo || '';
-  $('formImage').value = r.image || '';
-  updateImagePreview(r.image);
+  fillForm({ title: r.title, description: r.description, image: r.image, ingredients: r.ingredients, instructions: r.instructions, url: r.url || '' });
   renderFormTags();
-  renderIngredients(r.ingredients || []);
+  showStep('form');
   openOverlay('formOverlay');
 }
 
@@ -715,6 +852,7 @@ $('saveBtn').addEventListener('click', async () => {
   const title = $('formTitle').value.trim();
   if (!title) { $('formTitle').focus(); return; }
   const payload = {
+    url: $('formUrl').value.trim(),
     title,
     description: $('formDescription').value.trim(),
     image: $('formImage').value.trim(),
