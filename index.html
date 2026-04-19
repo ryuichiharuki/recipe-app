@@ -180,8 +180,8 @@
     .detail-ingredients li::before { content: '•'; color: var(--primary); font-weight: 700; }
     .detail-instructions { font-size: 14px; color: var(--text); line-height: 1.8; white-space: pre-wrap; }
     .detail-memo { background: #fffaf6; border: 1.5px solid #ffd4a8; border-radius: var(--radius-sm); padding: 12px 14px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; color: var(--text); }
-    .detail-source { font-size: 13px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-3); word-break: break-all; }
-    .detail-source a { color: var(--primary); }
+    .detail-source-btn { display: block; margin-top: 16px; padding: 12px 16px; background: var(--primary-light); color: var(--primary); border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; text-decoration: none; text-align: center; }
+    .detail-source-btn:hover { background: #fde0cc; }
     .detail-date { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 
     /* Spinner */
@@ -624,6 +624,10 @@ function openDetail(id) {
     sec.appendChild(el('div', { class: 'detail-section-title', text: '📝 メモ' }));
     sec.appendChild(el('div', { class: 'detail-memo', text: r.memo }));
     content.appendChild(sec);
+  }
+  if (r.url) {
+    const link = el('a', { class: 'detail-source-btn', href: r.url, target: '_blank', rel: 'noopener', text: '🔗 元のレシピページを開く' });
+    content.appendChild(link);
   }
   content.appendChild(el('div', { class: 'detail-date', text: `保存日: ${fmtDate(r.created_at)}` }));
   body.appendChild(content);
