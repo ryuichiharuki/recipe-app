@@ -84,10 +84,6 @@
     /* Cards */
     .recipe-card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; border: 1px solid var(--border); display: flex; flex-direction: column; }
     .recipe-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-    .card-thumb { aspect-ratio: 16/9; overflow: hidden; background: var(--bg); }
-    .card-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
-    .recipe-card:hover .card-thumb img { transform: scale(1.04); }
-    .card-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 40px; background: linear-gradient(135deg, #fff0e8, #ffe4cc); }
     .card-body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
     .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .card-category { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; background: var(--primary-light); color: var(--primary); white-space: nowrap; }
@@ -507,15 +503,6 @@ function renderRecipes() {
 
 function createCard(r) {
   const card = el('div', { class: 'recipe-card' });
-  const thumb = el('div', { class: 'card-thumb' });
-  if (r.image) {
-    const img = el('img', { src: r.image, alt: r.title, loading: 'lazy' });
-    img.onerror = () => img.replaceWith(placeholder(r));
-    thumb.appendChild(img);
-  } else {
-    thumb.appendChild(placeholder(r));
-  }
-  card.appendChild(thumb);
   const body = el('div', { class: 'card-body' });
   const tags = r.tags || [];
   if (r.category || tags.length) {
